@@ -1,0 +1,49 @@
+name: Vigilante intervals.icu
+
+on:
+  schedule:
+    # Cada 5 minutos de 04:00 a 22:59 UTC (de 5:00 a 23:59 en Madrid en invierno).
+    # Minutos impares para evitar la cola de las horas en punto.
+    - cron: "3-58/5 4-22 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Prueba: mirar intervals sin disparar nada ni guardar estado"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vigilante
+  cancel-in-progress: false
+
+jobs:
+  vigilar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mirar intervals.icu y disparar las tareas
+        env:
+          INTERVALS_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
+          INTERVALS_ATHLETE_ID: ${{ vars.INTERVALS_ATHLETE_ID }}
+          RECOVERY_TRIGGER_ID: ${{ vars.RECOVERY_TRIGGER_ID }}
+          RECOVERY_FIRE_TOKEN: ${{ secrets.RECOVERY_FIRE_TOKEN }}
+          ANALISIS_TRIGGER_ID: ${{ vars.ANALISIS_TRIGGER_ID }}
+          ANALISIS_FIRE_TOKEN: ${{ secrets.ANALISIS_FIRE_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || '' }}
+        run: python3 watcher.py
+
+      - name: Guardar el estado
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain state/)" ]; then
+            git config user.name "vigilante"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state/
+            git commit -q -m "estado"
+            git push -q
+          fi

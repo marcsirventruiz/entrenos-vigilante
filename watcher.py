@@ -3,8 +3,9 @@
 
 Cada pocos minutos (GitHub Actions) mira en intervals.icu:
   1. Si ya han llegado los datos de recuperación de hoy (VFC, FC en reposo,
-     recovery). En cuanto llegan, dispara la tarea de recovery. Si a la hora
-     tope aún no han llegado, la dispara igual para que avise.
+     recovery). Dispara la tarea de recovery con la recovery más reciente y la
+     vuelve a disparar si después llega otra distinta (p. ej. Whoop sube una
+     provisional de madrugada). Si a la hora tope no hay datos, avisa igual.
   2. Si hay una salida nueva en bici (no trayecto) ya procesada por intervals.
      Si la hay, dispara la tarea de análisis con su ID.
 
@@ -34,7 +35,12 @@ FIRE = os.environ.get("FIRE_URL_TEMPLATE") or "https://api.anthropic.com/v1/clau
 STATE_FILE = os.environ.get("STATE_FILE", "state/state.json")
 
 # Ventanas (hora local de Madrid)
-RECOVERY_DESDE = dt.time(5, 0)
+RECOVERY_DESDE = dt.time(6, 0)       # nunca antes (no despertarle con avisos)
+PROVISIONAL_HASTA = dt.time(7, 30)   # antes de esta hora, <6 h de sueño = provisional
+SUENO_PROVISIONAL_S = 6 * 3600
+PASADAS_ESTABLES = 2                 # valores iguales en 2 pasadas seguidas (~5')
+MAX_DISPAROS_RECOVERY = 4
+CAMPOS_RECOVERY = ("hrv", "restingHR", "readiness", "sleepSecs", "sleepScore")
 RECOVERY_HASTA = dt.time(13, 0)
 FALLBACK_LABORABLE = dt.time(9, 15)   # lunes a viernes
 FALLBACK_FINDE = dt.time(10, 30)      # sábado y domingo
@@ -160,61 +166,90 @@ def es_salida(a):
 
 # ---------------------------------------------------------------- lógica
 
-def revisar_recovery(estado, ahora, inicial):
+def revisar_recovery(estado, ahora, inicial, salio_hoy):
+    """Dispara la tarea de recovery con la recovery MÁS RECIENTE de hoy.
+
+    - Espera a que los valores no cambien en dos pasadas seguidas (~5').
+    - Antes de las 7:30, si el sueño es de menos de 6 h, lo trata como provisional
+      (p. ej. Whoop sube una recovery a las 4:00 porque se despertó) y espera.
+    - Si después llega una recovery distinta, vuelve a disparar como ACTUALIZACIÓN,
+      hasta que salga a entrenar o hasta las 13:00 (máximo 4 disparos con datos al día).
+    - Si a la hora tope no hay datos, avisa con SIN DATOS.
+    """
     hoy = ahora.date().isoformat()
     h = huella("w" + hoy)
-    reg = estado.setdefault("w", {}).setdefault(h, {"vistas": 0, "con_datos": False, "sin_datos": False})
-    if reg["con_datos"] or not (RECOVERY_DESDE <= ahora.time() < RECOVERY_HASTA):
-        return False, False
+    reg = estado.setdefault("w", {}).setdefault(h, {})
+    for k, v in {"firma": "", "pendiente": "", "estables": 0, "disparos": 0, "sin_datos": False}.items():
+        reg.setdefault(k, v)
+    if not (RECOVERY_DESDE <= ahora.time() < RECOVERY_HASTA) or salio_hoy:
+        return False
 
     w = wellness_de(hoy)
-    campos = ("hrv", "restingHR", "readiness")
-    presentes = [c for c in campos if w.get(c) is not None]
-
-    if presentes:
-        reg["vistas"] += 1
+    if any(w.get(c) is not None for c in ("hrv", "restingHR", "readiness")):
+        firma = huella("v" + "|".join(str(w.get(c)) for c in CAMPOS_RECOVERY))
+        if firma == reg["firma"]:
+            return False
+        if firma == reg["pendiente"]:
+            reg["estables"] += 1
+        else:
+            reg["pendiente"], reg["estables"] = firma, 1
         if inicial:
-            # Primera ejecución del vigilante: hoy ya lo habrá mirado la tarea por horario.
-            reg["con_datos"] = True
-            return False, True
-        # Disparar cuando están los tres, o a la segunda pasada si falta alguno
-        # (la recovery de su app a veces no llega).
-        if len(presentes) == len(campos) or reg["vistas"] >= 2:
+            # Primera ejecución del vigilante: lo de hoy ya lo revisaron las tareas antiguas.
+            reg["firma"] = firma
+            return False
+        if reg["estables"] < PASADAS_ESTABLES or reg["disparos"] >= MAX_DISPAROS_RECOVERY:
+            return False
+        sueno = w.get("sleepSecs")
+        if ahora.time() < PROVISIONAL_HASTA and sueno is not None and sueno < SUENO_PROVISIONAL_S:
+            return False  # probablemente provisional: esperar a que siga durmiendo o a las 7:30
+
+        valores = (
+            f"hrv={fmt_val(w.get('hrv'))}, restingHR={fmt_val(w.get('restingHR'))}, "
+            f"readiness={fmt_val(w.get('readiness'))}, sueño={fmt_dur(sueno)}, "
+            f"sleepScore={fmt_val(w.get('sleepScore'))}"
+        )
+        if reg["firma"]:
+            texto = (
+                f"AVISO DEL VIGILANTE · RECOVERY · ACTUALIZACIÓN · {hoy} {ahora:%H:%M} (Europe/Madrid)\n"
+                f"La recovery de hoy ha cambiado en intervals.icu después de un aviso anterior. "
+                f"Valores más recientes: {valores}. Decide con estos y corrige lo que se hizo antes si hace falta."
+            )
+        else:
             texto = (
                 f"AVISO DEL VIGILANTE · RECOVERY · {hoy} {ahora:%H:%M} (Europe/Madrid)\n"
-                f"Han llegado a intervals.icu los datos de recuperación de hoy: "
-                f"hrv={fmt_val(w.get('hrv'))}, restingHR={fmt_val(w.get('restingHR'))}, "
-                f"readiness={fmt_val(w.get('readiness'))}, sueño={fmt_dur(w.get('sleepSecs'))}, "
-                f"sleepScore={fmt_val(w.get('sleepScore'))}."
+                f"Han llegado a intervals.icu los datos de recuperación de hoy: {valores}."
             )
             if reg["sin_datos"]:
                 texto += " (Antes ya se envió un aviso de SIN DATOS: estos han llegado después.)"
-            if disparar("recovery", texto):
-                reg["con_datos"] = True
-                return True, True
-            raise RuntimeError("fallo al disparar la tarea de recovery")
-        return False, True
+        if disparar("recovery", texto):
+            reg["firma"] = firma
+            reg["disparos"] += 1
+            return True
+        raise RuntimeError("fallo al disparar la tarea de recovery")
 
     tope = FALLBACK_FINDE if ahora.weekday() >= 5 else FALLBACK_LABORABLE
-    if not reg["sin_datos"] and ahora.time() >= tope and not inicial:
-        texto = (
-            f"AVISO DEL VIGILANTE · RECOVERY · SIN DATOS · {hoy} {ahora:%H:%M} (Europe/Madrid)\n"
-            f"A esta hora aún no han llegado a intervals.icu la VFC, la FC en reposo ni la recovery de hoy. "
-            f"Si llegan antes de las {RECOVERY_HASTA:%H:%M}, recibirás otro aviso."
-        )
-        if disparar("recovery", texto):
-            reg["sin_datos"] = True
-            return True, True
-        raise RuntimeError("fallo al disparar la tarea de recovery (sin datos)")
-    if inicial and ahora.time() >= tope:
+    if reg["sin_datos"] or reg["firma"] or ahora.time() < tope:
+        return False
+    if inicial:
         reg["sin_datos"] = True
-        return False, True
-    return False, False
+        return False
+    texto = (
+        f"AVISO DEL VIGILANTE · RECOVERY · SIN DATOS · {hoy} {ahora:%H:%M} (Europe/Madrid)\n"
+        f"A esta hora aún no han llegado a intervals.icu la VFC, la FC en reposo ni la recovery de hoy. "
+        f"Si llegan antes de las {RECOVERY_HASTA:%H:%M}, recibirás otro aviso."
+    )
+    if disparar("recovery", texto):
+        reg["sin_datos"] = True
+        return True
+    raise RuntimeError("fallo al disparar la tarea de recovery (sin datos)")
 
 
-def revisar_actividades(estado, ahora, inicial):
+def salio_hoy(lista, hoy):
+    return any(es_salida(a) and str(a.get("start_date_local", "")).startswith(hoy) for a in lista)
+
+
+def revisar_actividades(estado, ahora, inicial, lista):
     hoy = ahora.date()
-    lista = actividades((hoy - dt.timedelta(days=1)).isoformat(), hoy.isoformat())
     vistas = estado.setdefault("a", {})
     hechas = estado.setdefault("hechas", [])
     nuevas, cambio, strava = [], False, 0
@@ -288,8 +323,21 @@ def main():
         ahora = dt.datetime.fromisoformat(env("FAKE_NOW")).replace(tzinfo=TZ)
 
     errores = 0
+    hoy = ahora.date()
+    lista = None
     try:
-        disp, _ = revisar_recovery(estado, ahora, inicial)
+        lista = actividades((hoy - dt.timedelta(days=1)).isoformat(), hoy.isoformat())
+    except urllib.error.HTTPError as e:
+        errores += 1
+        log(f"ERROR leyendo actividades en intervals: HTTP {e.code}")
+    except Exception as e:
+        errores += 1
+        log(f"ERROR leyendo actividades: {type(e).__name__}")
+
+    try:
+        if lista is None:
+            raise RuntimeError("sin lista de actividades")
+        disp = revisar_recovery(estado, ahora, inicial, salio_hoy(lista, hoy.isoformat()))
         log("Recovery: aviso enviado" if disp else "Recovery: nada nuevo")
     except urllib.error.HTTPError as e:
         errores += 1
@@ -299,11 +347,9 @@ def main():
         log(f"ERROR en recovery: {e if isinstance(e, RuntimeError) else type(e).__name__}")
 
     try:
-        revisar_actividades(estado, ahora, inicial)
-        log("Actividades: revisadas")
-    except urllib.error.HTTPError as e:
-        errores += 1
-        log(f"ERROR leyendo actividades en intervals: HTTP {e.code}")
+        if lista is not None:
+            revisar_actividades(estado, ahora, inicial, lista)
+            log("Actividades: revisadas")
     except Exception as e:
         errores += 1
         log(f"ERROR en actividades: {e if isinstance(e, RuntimeError) else type(e).__name__}")

@@ -2,7 +2,7 @@
 
 Cada 5 minutos (de 5:00 a 24:00, hora de Madrid) mira intervals.icu y avisa a dos tareas programadas de Claude por su disparador de API:
 
-- **Recovery:** en cuanto llegan los datos de recuperación del día (VFC, FC en reposo, recovery). Si a las 9:15 entre semana o a las 10:30 el fin de semana aún no han llegado, avisa igual. Si llegan más tarde, antes de las 13:00, vuelve a avisar.
+- **Recovery:** con la recovery más reciente del día (VFC, FC en reposo, recovery, sueño), desde las 6:00, cuando los valores llevan 2 pasadas sin cambiar. Antes de las 7:30, si el sueño es de menos de 6 h, la trata como provisional y espera. Si después llega otra recovery distinta, vuelve a avisar como ACTUALIZACIÓN (hasta que sale a entrenar o las 13:00; como mucho 4 avisos al día). Si a las 9:15 entre semana o a las 10:30 el fin de semana no hay datos, avisa igual.
 - **Análisis:** cuando entra una salida en bici nueva (más de 35' o 10 km; los trayectos no cuentan) y intervals ya la ha procesado.
 
 No usa ningún servidor ni ordenador propio: corre en GitHub Actions.

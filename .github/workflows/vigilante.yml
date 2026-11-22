@@ -30,9 +30,9 @@ jobs:
         env:
           INTERVALS_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
           INTERVALS_ATHLETE_ID: ${{ vars.INTERVALS_ATHLETE_ID }}
-          RECOVERY_TRIGGER_ID: ${{ vars.RECOVERY_TRIGGER_ID || 'trig_01KKhmWvt3BvjqPyuTvWUcLA' }}
+          RECOVERY_TRIGGER_ID: ${{ vars.RECOVERY_TRIGGER_ID || 'trig_01UhePx4vLeRnNDBt4R4tecb' }}
           RECOVERY_FIRE_TOKEN: ${{ secrets.RECOVERY_FIRE_TOKEN }}
-          ANALISIS_TRIGGER_ID: ${{ vars.ANALISIS_TRIGGER_ID || 'trig_01Rkww3iB8rsbzExrWTvaS5W' }}
+          ANALISIS_TRIGGER_ID: ${{ vars.ANALISIS_TRIGGER_ID || 'trig_017fU8RxiQq4DLFjsUu4aEYy' }}
           ANALISIS_FIRE_TOKEN: ${{ secrets.ANALISIS_FIRE_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || '' }}
         run: python3 watcher.py

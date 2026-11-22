@@ -1,0 +1,16 @@
+{
+ "a": {},
+ "fallos": 0,
+ "hechas": [
+  "8d986eae5d03c0534269",
+  "558f5c9b7e24ecbdcb1b"
+ ],
+ "iniciado": true,
+ "w": {
+  "841a8295103bea70a29d": {
+   "con_datos": false,
+   "sin_datos": false,
+   "vistas": 0
+  }
+ }
+}

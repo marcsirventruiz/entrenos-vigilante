@@ -16,8 +16,8 @@ En *Settings → Secrets and variables → Actions*:
 | Secret | `INTERVALS_API_KEY` | API key de intervals.icu (Settings → Developer Settings) |
 | Secret | `RECOVERY_FIRE_TOKEN` | Token de API de la tarea de recovery (claude.ai/code/routines) |
 | Secret | `ANALISIS_FIRE_TOKEN` | Token de API de la tarea de análisis |
-| Variable | `RECOVERY_TRIGGER_ID` | ID `trig_…` de la tarea de recovery |
-| Variable | `ANALISIS_TRIGGER_ID` | ID `trig_…` de la tarea de análisis |
+| Variable | `RECOVERY_TRIGGER_ID` | Opcional: ID `trig_…` de la tarea de recovery (por defecto, el del workflow) |
+| Variable | `ANALISIS_TRIGGER_ID` | Opcional: ID `trig_…` de la tarea de análisis (por defecto, el del workflow) |
 | Variable | `INTERVALS_ATHLETE_ID` | Opcional (por defecto `0`, el dueño de la API key) |
 
 Mientras falte algo, el vigilante no hace nada.

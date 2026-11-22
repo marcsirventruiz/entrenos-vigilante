@@ -7,6 +7,13 @@
  ],
  "iniciado": true,
  "w": {
+  "53f89e12b62f7a6a5dc0": {
+   "disparos": 0,
+   "estables": 0,
+   "firma": "",
+   "pendiente": "",
+   "sin_datos": false
+  },
   "841a8295103bea70a29d": {
    "con_datos": false,
    "disparos": 0,

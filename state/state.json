@@ -8,9 +8,9 @@
  "iniciado": true,
  "w": {
   "53f89e12b62f7a6a5dc0": {
-   "disparos": 0,
-   "estables": 1,
-   "firma": "",
+   "disparos": 1,
+   "estables": 2,
+   "firma": "2b7b4279001fa53e2d74",
    "pendiente": "2b7b4279001fa53e2d74",
    "sin_datos": false
   },

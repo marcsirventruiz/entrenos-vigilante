@@ -41,9 +41,9 @@
   },
   "ec7b06bc75250164da5c": {
    "disparos": 0,
-   "estables": 0,
+   "estables": 1,
    "firma": "",
-   "pendiente": "",
+   "pendiente": "3e456eaa64feeba37d93",
    "sin_datos": true
   }
  }

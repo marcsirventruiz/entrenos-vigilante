@@ -40,9 +40,9 @@
    "vistas": 0
   },
   "ec7b06bc75250164da5c": {
-   "disparos": 0,
-   "estables": 1,
-   "firma": "",
+   "disparos": 1,
+   "estables": 2,
+   "firma": "3e456eaa64feeba37d93",
    "pendiente": "3e456eaa64feeba37d93",
    "sin_datos": true
   }
